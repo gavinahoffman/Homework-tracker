@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../presenters/course_presenter.dart';
+import '../models/course_model.dart';
 
 class CourseListScreen extends StatefulWidget {
   const CourseListScreen({super.key});
@@ -9,7 +10,24 @@ class CourseListScreen extends StatefulWidget {
 }
 
 class _CourseListScreenState extends State<CourseListScreen> {
-  final CoursePresenter presenter = CoursePresenter();
+  late CoursePresenter presenter;
+  List<Course> courses = [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    presenter = CoursePresenter(
+      CourseModel(),
+      onCoursesLoaded: (loadedCourses) {
+        setState(() {
+          courses = loadedCourses;
+        });
+      },
+    );
+
+    presenter.loadCourses();
+  }
 
   void _showAddCourseDialog() {
     final nameController = TextEditingController();
@@ -24,12 +42,13 @@ class _CourseListScreenState extends State<CourseListScreen> {
           children: [
             TextField(
               controller: nameController,
-              decoration: const InputDecoration(labelText: 'Course Name'),
+              decoration:
+                  const InputDecoration(labelText: 'Course Name'),
             ),
             TextField(
               controller: descController,
-              decoration:
-                  const InputDecoration(labelText: 'Description (optional)'),
+              decoration: const InputDecoration(
+                  labelText: 'Description (optional)'),
             ),
           ],
         ),
@@ -39,14 +58,13 @@ class _CourseListScreenState extends State<CourseListScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               if (nameController.text.isNotEmpty) {
-                setState(() {
-                  presenter.addCourse(
-                    nameController.text,
-                    descController.text,
-                  );
-                });
+                await presenter.addCourse(
+                  nameController.text,
+                  descController.text,
+                );
+                await presenter.loadCourses();
                 Navigator.pop(context);
               }
             },
@@ -59,18 +77,18 @@ class _CourseListScreenState extends State<CourseListScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final courses = presenter.courses;
-
     return Scaffold(
       appBar: AppBar(title: const Text('Courses')),
       body: ListView.builder(
         itemCount: courses.length,
         itemBuilder: (context, index) {
           final course = courses[index];
+
           return ListTile(
             title: Text(course.name),
             subtitle:
-                course.description != null && course.description!.isNotEmpty
+                course.description != null &&
+                        course.description!.isNotEmpty
                     ? Text(course.description!)
                     : null,
           );
