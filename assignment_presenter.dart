@@ -1,16 +1,24 @@
 import '../models/assignment_model.dart';
 
 class AssignmentPresenter {
-  final List<Assignment> _assignments = [];
+  final AssignmentModel model;
+  final Function(List<Assignment>) onAssignmentsLoaded;
 
-  List<Assignment> get assignments => _assignments;
+  AssignmentPresenter(
+    this.model, {
+    required this.onAssignmentsLoaded,
+  });
 
-  void addAssignment(String title) {
-    _assignments.add(Assignment(title: title));
+  Future<void> loadAssignments() async {
+    final assignments = await model.loadAssignments();
+    onAssignmentsLoaded(assignments);
   }
 
-  void toggleCompleted(int index) {
-    _assignments[index].isCompleted =
-        !_assignments[index].isCompleted;
+  Future<void> addAssignment(String title) async {
+    await model.addAssignment(title);
+  }
+
+  Future<void> toggleAssignment(int index) async {
+    await model.toggleAssignment(index);
   }
 }
