@@ -1,83 +1,77 @@
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_database/firebase_database.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../services/auth_service.dart';
 
 class Assignment {
-  final String title;
+  String title;
   bool isCompleted;
+  String courseName;
 
   Assignment({
     required this.title,
     this.isCompleted = false,
+    this.courseName = '',
   });
 
-  factory Assignment.fromMap(Map<dynamic, dynamic> data) {
-    return Assignment(
-      title: data['title'] ?? '',
-      isCompleted: data['isCompleted'] ?? false,
-    );
-  }
+  Map<String, dynamic> toJson() => {
+        'title': title,
+        'isCompleted': isCompleted,
+        'courseName': courseName,
+      };
 
-  Map<String, dynamic> toMap() {
-    return {
-      'title': title,
-      'isCompleted': isCompleted,
-    };
-  }
+  factory Assignment.fromJson(Map<String, dynamic> json) => Assignment(
+        title: json['title'] ?? '',
+        isCompleted: json['isCompleted'] ?? false,
+        courseName: json['courseName'] ?? '',
+      );
 }
 
 class AssignmentModel {
-  final FirebaseDatabase _db = FirebaseDatabase.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  Future<String> _getKey() async {
+    final email = await AuthService().getCurrentUserEmail();
+    return 'assignments_${email ?? 'guest'}';
+  }
 
-  Future<List<Assignment>> loadAssignments() async {
-    final user = _auth.currentUser;
-    if (user == null) return [];
-
-    final snapshot =
-        await _db.ref("assignments/${user.uid}").once();
-
-    if (snapshot.snapshot.value == null) return [];
-
-    final data =
-        snapshot.snapshot.value as Map<dynamic, dynamic>;
-
-    return data.values
-        .map((item) => Assignment.fromMap(item))
+  Future<List<Assignment>> fetchAssignments() async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _getKey();
+    final data = prefs.getStringList(key) ?? [];
+    return data
+        .map((s) => Assignment.fromJson(jsonDecode(s)))
         .toList();
   }
 
-  Future<void> addAssignment(String title) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
-    final assignment = Assignment(title: title);
-
-    await _db
-        .ref("assignments/${user.uid}")
-        .push()
-        .set(assignment.toMap());
+  Future<void> saveAssignments(List<Assignment> assignments) async {
+    final prefs = await SharedPreferences.getInstance();
+    final key = await _getKey();
+    final data = assignments.map((a) => jsonEncode(a.toJson())).toList();
+    await prefs.setStringList(key, data);
   }
 
-  Future<void> toggleAssignment(int index) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+  Future<void> addAssignment(String title, String courseName) async {
+    final assignments = await fetchAssignments();
+    assignments.add(Assignment(title: title, courseName: courseName));
+    await saveAssignments(assignments);
+  }
 
-    final ref = _db.ref("assignments/${user.uid}");
-    final snapshot = await ref.once();
+  Future<void> toggleCompleted(int index) async {
+    final assignments = await fetchAssignments();
+    if (index >= assignments.length) return;
+    assignments[index].isCompleted = !assignments[index].isCompleted;
+    await saveAssignments(assignments);
+  }
 
-    if (snapshot.snapshot.value == null) return;
+  Future<void> deleteAssignment(int index) async {
+    final assignments = await fetchAssignments();
+    if (index >= assignments.length) return;
+    assignments.removeAt(index);
+    await saveAssignments(assignments);
+  }
 
-    final data =
-        snapshot.snapshot.value as Map<dynamic, dynamic>;
-
-    final keys = data.keys.toList();
-
-    final selectedKey = keys[index];
-    final currentValue =
-        data[selectedKey]['isCompleted'] ?? false;
-
-    await ref.child(selectedKey).update({
-      'isCompleted': !currentValue,
-    });
+  Future<void> updateAssignmentTitle(int index, String newTitle) async {
+    final assignments = await fetchAssignments();
+    if (index >= assignments.length) return;
+    assignments[index].title = newTitle;
+    await saveAssignments(assignments);
   }
 }
