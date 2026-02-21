@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../presenters/course_presenter.dart';
-import '../models/course_model.dart';
+import '../models/models/course_model.dart';
+import '../widgets/add_fab.dart';
 
 class CourseListScreen extends StatefulWidget {
   const CourseListScreen({super.key});
@@ -10,45 +11,46 @@ class CourseListScreen extends StatefulWidget {
 }
 
 class _CourseListScreenState extends State<CourseListScreen> {
-  late CoursePresenter presenter;
-  List<Course> courses = [];
+  final CoursePresenter _presenter = CoursePresenter();
+  List<Course> _courses = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    _loadCourses();
+  }
 
-    presenter = CoursePresenter(
-      CourseModel(),
-      onCoursesLoaded: (loadedCourses) {
-        setState(() {
-          courses = loadedCourses;
-        });
-      },
-    );
-
-    presenter.loadCourses();
+  Future<void> _loadCourses() async {
+    setState(() => _isLoading = true);
+    final courses = await _presenter.loadCourses();
+    setState(() {
+      _courses = courses;
+      _isLoading = false;
+    });
   }
 
   void _showAddCourseDialog() {
-    final nameController = TextEditingController();
-    final descController = TextEditingController();
+    String courseName = '';
+    String courseDescription = '';
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (context) => AlertDialog(
         title: const Text('Add Course'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: nameController,
-              decoration:
-                  const InputDecoration(labelText: 'Course Name'),
+              autofocus: true,
+              decoration: const InputDecoration(hintText: 'Course name'),
+              onChanged: (value) => courseName = value,
             ),
+            const SizedBox(height: 8),
             TextField(
-              controller: descController,
               decoration: const InputDecoration(
-                  labelText: 'Description (optional)'),
+                  hintText: 'Description (optional)'),
+              onChanged: (value) => courseDescription = value,
             ),
           ],
         ),
@@ -57,15 +59,17 @@ class _CourseListScreenState extends State<CourseListScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          ElevatedButton(
+          TextButton(
             onPressed: () async {
-              if (nameController.text.isNotEmpty) {
-                await presenter.addCourse(
-                  nameController.text,
-                  descController.text,
-                );
-                await presenter.loadCourses();
+              if (courseName.trim().isNotEmpty) {
                 Navigator.pop(context);
+                await _presenter.addCourse(
+                  courseName.trim(),
+                  description: courseDescription.trim().isEmpty
+                      ? null
+                      : courseDescription.trim(),
+                );
+                await _loadCourses();
               }
             },
             child: const Text('Add'),
@@ -79,24 +83,37 @@ class _CourseListScreenState extends State<CourseListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Courses')),
-      body: ListView.builder(
-        itemCount: courses.length,
-        itemBuilder: (context, index) {
-          final course = courses[index];
-
-          return ListTile(
-            title: Text(course.name),
-            subtitle:
-                course.description != null &&
-                        course.description!.isNotEmpty
-                    ? Text(course.description!)
-                    : null,
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _courses.isEmpty
+              ? const Center(
+                  child: Text('No courses yet. Tap + to add one!'))
+              : ListView.builder(
+                  itemCount: _courses.length,
+                  itemBuilder: (context, index) {
+                    final course = _courses[index];
+                    return ListTile(
+                      leading:
+                          const Icon(Icons.book, color: Colors.blue),
+                      title: Text(course.name),
+                      subtitle: (course.description != null &&
+                              course.description!.isNotEmpty)
+                          ? Text(course.description!)
+                          : null,
+                      trailing: IconButton(
+                        icon:
+                            const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () async {
+                          await _presenter.deleteCourse(course.name);
+                          await _loadCourses();
+                        },
+                      ),
+                    );
+                  },
+                ),
+      floatingActionButton: AddFAB(
         onPressed: _showAddCourseDialog,
-        child: const Icon(Icons.add),
+        tooltip: 'Add Course',
       ),
     );
   }
